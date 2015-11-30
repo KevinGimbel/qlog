@@ -1,0 +1,3 @@
+apache: /var/log/apache2
+magento: ./var/log
+nginx: /var/log/nginx

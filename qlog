@@ -1,0 +1,129 @@
+#!/bin/bash
+
+VERSION="0.0.1-alpha"
+CONF_FILE=$HOME/.qlogcnf
+LOG_FILE_PATH=''
+
+get_config() {
+# read config file
+
+if [ ! -f "$CONF_FILE" ]; then
+  echo "Cannot find or open qlog conf file ~/.qlogcnf"
+  exit 1
+fi
+
+while read line; do
+  if [[ "$line" =~ ^$1 ]]; then
+    LINE=$line
+    searchStr=$1
+    # matched names + space + ':'
+    strStart=$((${#searchStr} + 2))
+    # whole line length
+    strEnd=${#line}
+    # get the path to the log file
+    LOG_FILE_PATH=$(echo `expr substr "$LINE" $strStart $strEnd`)
+  fi
+done < $CONF_FILE
+
+if [[ ! -n $LOG_FILE_PATH ]]; then
+  not_found_config $1
+else
+  create_log $1 $LOG_FILE_PATH
+fi
+}
+
+
+create_log() {
+  if [ ! -d $2 ]; then
+    echo "Cannot find or open directory '$2'.
+See '$(basename $0) -u' for usage information."
+    exit
+  fi
+  echo "Creating log for $1 using logs from $2"
+  LOG_DIR=$2
+  # get all log files
+  FILES=$(find "$LOG_DIR" -type f)
+  # create a file in /tmp
+  touch /tmp/$1_qlog.log
+  TMP_LOG=/tmp/$1_qlog.log
+
+  # go through all log files and
+  # write their contents to the file in /tmp/
+  for file in $FILES; do
+    if [ ${file: -4} == ".log" ]; then
+      sudo echo "
+  ======================================
+  ===== FILE: $file
+  ======================================" >> $TMP_LOG
+      sudo cat $file >> $TMP_LOG
+    fi
+  done
+
+  echo "Combined log file written to $TMP_LOG"
+}
+
+not_found_config() {
+  echo "Unable to find '$1'. Is it defined inside the ~/.qlogcnf file?"
+  echo "Run '$(basename $0) -u' for usage information"
+}
+
+version() {
+echo "  qlog - log file combiner
+
+  Version: $VERSION
+  Author: Kevin Gimbel <http://kevingimbel.com>
+  Bugs: <http://github.com/kevingimbel/qlog/issues>"
+}
+
+script_info() {
+  version
+  echo "
+  qlog reads logs and combines them into one big log file for quicker log
+  search. This is especially helpful when you're not sure in which log file a
+  relevant error or warning may be written. The combined log file is written to
+  /tmp/appname_qlog.log, e.g. /tmp/magento_qlog.log for '$(basename $0) magento'
+  "
+  usage
+  example
+}
+
+usage() {
+  echo "
+  USAGE: $(basename $0) [appname | -u | -v]
+
+  appname   Name of the application, configured in ~/.qlogcnf
+  -u        Prints usage message
+  -v        Prints version"
+}
+
+example() {
+  echo "
+  Example:
+  $ qlog magento
+  $ qlog apache
+
+  Example configuration file ~/.qlogcnf
+  apache: /var/log/apache2
+  magento: ./var/log
+
+  Notice the '.' in front of the Magento path. This way the script can be used
+  to read the logs in the current directory. This relative path is useful when
+  having multiple instances of an app running on the same system, e.g. your
+  localhost."
+}
+
+if [ $1 ]; then
+  case $1 in
+
+    '-u' | '--usage')
+      script_info
+    ;;
+    '-v' | '--version')
+      version
+    ;;
+    *)
+      get_config $1
+  esac
+else
+  script_info
+fi
